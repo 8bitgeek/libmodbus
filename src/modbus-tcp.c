@@ -15,7 +15,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 	#include <caribou/kernel/timer.h>
 	#include <caribou/kernel/thread.h>
@@ -527,7 +527,7 @@ int modbus_tcp_listen(modbus_t *ctx, int nb_connection)
         return -1;
     }
 
-	#if !defined(CARIBOU_RTOS)
+	#if !defined(_CARIBOU_RTOS_)
 		yes = 1;
 		if (setsockopt(new_s, SOL_SOCKET, SO_REUSEADDR,
 					   (char *) &yes, sizeof(yes)) == -1) {
@@ -540,7 +540,7 @@ int modbus_tcp_listen(modbus_t *ctx, int nb_connection)
     addr.sin_family = AF_INET;
     /* If the modbus port is < to 1024, we need the setuid root. */
     addr.sin_port = htons(ctx_tcp->port);
-	#if !defined(CARIBOU_RTOS)
+	#if !defined(_CARIBOU_RTOS_)
 		if (ctx_tcp->ip[0] == '0') {
 			/* Listen any addresses */
 			addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -602,7 +602,7 @@ int modbus_tcp_pi_listen(modbus_t *ctx, int nb_connection)
 
     memset(&ai_hints, 0, sizeof (ai_hints));
     /* If node is not NULL, than the AI_PASSIVE flag is ignored. */
-	#if !defined(CARIBOU_RTOS)
+	#if !defined(_CARIBOU_RTOS_)
 		ai_hints.ai_flags |= AI_PASSIVE;
 	#endif
 	#ifdef AI_ADDRCONFIG
@@ -712,7 +712,7 @@ int modbus_tcp_accept(modbus_t *ctx, int *s)
 
 int modbus_tcp_pi_accept(modbus_t *ctx, int *s)
 {
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		struct sockaddr addr;
 	#else
 		struct sockaddr_storage addr;

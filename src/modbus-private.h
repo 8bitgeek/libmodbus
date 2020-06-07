@@ -19,7 +19,7 @@
 #ifndef MODBUS_PRIVATE_H
 #define MODBUS_PRIVATE_H
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 	#include <caribou/kernel/timer.h>
 	#include <lwip/sockets.h>
@@ -119,7 +119,7 @@ struct _modbus {
     int s;
     int debug;
     int error_recovery;
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	caribou_tick_t response_timeout;
     caribou_tick_t byte_timeout;
 #else

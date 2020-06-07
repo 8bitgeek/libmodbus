@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 	#include <caribou/lib/stdio.h>
 	#include <caribou/lib/stdint.h>
@@ -449,7 +449,7 @@ static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int ms
     }
 }
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 
 static int _modbus_rtu_connect(modbus_t *ctx)
 {
@@ -1020,7 +1020,7 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 
 #endif /* CARIBOU_RTOS */
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 int modbus_rtu_set_serial_mode(modbus_t *ctx, int mode)
 {
 	return 0;
@@ -1084,7 +1084,7 @@ int modbus_rtu_get_serial_mode(modbus_t *ctx)
     }
 
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
         modbus_rtu_t *ctx_rtu = ctx->backend_data;
         return ctx_rtu->serial_mode;
 #elif HAVE_DECL_TIOCSRS485
@@ -1112,7 +1112,7 @@ int modbus_rtu_set_rts(modbus_t *ctx, int mode)
 
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) 
 	{
-		#if defined(CARIBOU_RTOS)
+		#if defined(_CARIBOU_RTOS_)
 			modbus_rtu_t *ctx_rtu = ctx->backend_data;
 			if ( mode )
 				cairbou_gpio_set(ctx_rtu->dir);
@@ -1156,7 +1156,7 @@ int modbus_rtu_get_rts(modbus_t *ctx)
 
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) 
 	{
-		#if defined(CARIBOU_RTOS)
+		#if defined(_CARIBOU_RTOS_)
 			modbus_rtu_t *ctx_rtu = ctx->backend_data;
 			return ctx_rtu->rts;
 		#elif HAVE_DECL_TIOCM_RTS
@@ -1180,7 +1180,7 @@ static void _modbus_rtu_close(modbus_t *ctx)
     /* Restore line settings and close file descriptor in RTU mode */
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	/* FIXME */
 #elif defined(_WIN32)
     /* Revert settings */
@@ -1204,7 +1204,7 @@ static void _modbus_rtu_close(modbus_t *ctx)
 
 static int _modbus_rtu_flush(modbus_t *ctx)
 {
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		return fflush(ctx->s);
 	#elif defined(_WIN32)
 		modbus_rtu_t *ctx_rtu = ctx->backend_data;
@@ -1256,7 +1256,7 @@ static int _modbus_rtu_select(modbus_t *ctx, fd_set *rset,
 
 static void _modbus_rtu_free(modbus_t *ctx) 
 {
-	#if !defined(CARIBOU_RTOS)
+	#if !defined(_CARIBOU_RTOS_)
 		modbus_rtu_t *ctx_rtu = ctx->backend_data;
 		free(ctx_rtu->device);
     #endif
@@ -1316,7 +1316,7 @@ modbus_t* modbus_new_rtu(FILE* device, caribou_gpio_t* dir,
 	ctx_rtu->dir = dir;
 
     /* Device name and \0 */
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		ctx_rtu->device = device;		
 	#else
 		ctx_rtu->device = (char *) malloc((strlen(device) + 1) * sizeof(char));

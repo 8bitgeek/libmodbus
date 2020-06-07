@@ -30,7 +30,7 @@
 	#include "stdint.h"
 #endif
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 	#include <lwip/api.h>
 	#include <lwip/tcp.h>

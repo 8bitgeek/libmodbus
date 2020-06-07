@@ -27,7 +27,7 @@
 
 #if defined(_WIN32)
 	#include <windows.h>
-#elif defined(CARIBOU_RTOS)
+#elif defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 #else
 	#include <termios.h>
@@ -71,7 +71,7 @@ typedef struct _modbus_rtu {
     uint8_t stop_bit;
     /* Parity: 'N', 'O', 'E' */
     char parity;
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	int serial_mode;
 	caribou_gpio_t* dir;
 	stdio_t* tios;

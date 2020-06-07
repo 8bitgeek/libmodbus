@@ -20,7 +20,7 @@
  * http://libmodbus.org/
  */
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 	#include <caribou/kernel/timer.h>
 	#include <caribou/kernel/thread.h>
@@ -40,7 +40,7 @@
 
 #include "modbus.h"
 #include "modbus-private.h"
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	#include "modbus-rtu-private.h"
 #endif
 
@@ -118,7 +118,7 @@ static void _sleep_response_timeout(modbus_t *ctx)
     /* usleep doesn't exist on Windows */
     Sleep((ctx->response_timeout.tv_sec * 1000) +
           (ctx->response_timeout.tv_usec / 1000));
-#elif defined(CARIBOU_RTOS)
+#elif defined(_CARIBOU_RTOS_)
 	caribou_thread_sleep_current(ctx->response_timeout);
 #else
     /* usleep source code */
@@ -343,7 +343,7 @@ static int compute_data_length_after_meta(modbus_t *ctx, uint8_t *msg,
     return length;
 }
 
-#if defined(CARIBOU_RTOS)
+#if defined(_CARIBOU_RTOS_)
 	/* Waits a response from a modbus server or a request from a modbus client.
 	   This function blocks if there is no replies (3 timeouts).
 
@@ -467,7 +467,7 @@ static int compute_data_length_after_meta(modbus_t *ctx, uint8_t *msg,
 
 int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 {
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		if ( ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU )
 		{
 			return _modbus_rtu_receive_msg(ctx,msg,msg_type);
@@ -582,7 +582,7 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 			 * received */
 			p_tv = NULL;
 		} else {
-			#if defined(CARIBOU_RTOS)
+			#if defined(_CARIBOU_RTOS_)
 				tv.tv_sec = 0;
 				tv.tv_usec = ctx->response_timeout * 1000;
 			#else
@@ -669,7 +669,7 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 				}
 			}
 
-			#if defined(CARIBOU_RTOS)
+			#if defined(_CARIBOU_RTOS_)
 				if (length_to_read > 0 && ctx->byte_timeout > 0) 
 				{
 					/* If there is no character in the buffer, the allowed timeout
@@ -1869,7 +1869,7 @@ void _modbus_init_common(modbus_t *ctx)
     ctx->debug = FALSE;
     ctx->error_recovery = MODBUS_ERROR_RECOVERY_NONE;
 
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		ctx->response_timeout = (_RESPONSE_TIMEOUT / 1000);
 		ctx->byte_timeout = (_BYTE_TIMEOUT / 1000);
 	#else
@@ -1933,7 +1933,7 @@ int modbus_get_response_timeout(modbus_t *ctx, uint32_t *to_sec, uint32_t *to_us
         errno = EINVAL;
         return -1;
     }
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		*to_sec = 0;
 		*to_usec = ctx->response_timeout * 1000;
 	#else
@@ -1950,7 +1950,7 @@ int modbus_set_response_timeout(modbus_t *ctx, uint32_t to_sec, uint32_t to_usec
         errno = EINVAL;
         return -1;
     }
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		ctx->response_timeout = to_usec / 1000;
 	#else
 		ctx->response_timeout.tv_sec = to_sec;
@@ -1966,7 +1966,7 @@ int modbus_get_byte_timeout(modbus_t *ctx, uint32_t *to_sec, uint32_t *to_usec)
         errno = EINVAL;
         return -1;
     }
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		*to_sec = 0;
 		*to_usec = ctx->byte_timeout * 1000;
 	#else
@@ -1983,7 +1983,7 @@ int modbus_set_byte_timeout(modbus_t *ctx, uint32_t to_sec, uint32_t to_usec)
         errno = EINVAL;
         return -1;
     }
-	#if defined(CARIBOU_RTOS)
+	#if defined(_CARIBOU_RTOS_)
 		ctx->byte_timeout = to_usec / 1000;
 	#else
 		ctx->byte_timeout.tv_sec = to_sec;
