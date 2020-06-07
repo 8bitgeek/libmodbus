@@ -15,20 +15,20 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+
 #if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
-	#include <lwip/api.h>
-	#include <lwip/tcp.h>	
 #else
 	#include <stdlib.h>
 	#ifndef _MSC_VER
-	#include <stdint.h>
+		#include <stdint.h>
 	#else
-	#include "stdint.h"
+		#include "stdint.h"
 	#endif
 	#include <string.h>
 	#include <assert.h>
-#endif
+#endif /* _CARIBOU_RTOS_ */
+
 #include "modbus.h"
 
 #if defined(HAVE_BYTESWAP_H)
@@ -42,9 +42,6 @@
 #    undef bswap_32
 #    define bswap_32 __builtin_bswap32
 #  endif
-#endif
-#if defined(_MSC_VER) && (_MSC_VER >= 1400)
-# define bswap_32 _byteswap_ulong
 #endif
 
 #if !defined(bswap_32)
@@ -66,25 +63,25 @@ static inline uint32_t bswap_32(uint32_t x)
 
 /* Sets many bits from a single byte value (all 8 bits of the byte value are
    set) */
-void modbus_set_bits_from_byte(uint8_t *dest, int idx, const uint8_t value)
+void modbus_set_bits_from_byte(uint8_t *dest, int index, const uint8_t value)
 {
     int i;
 
     for (i=0; i < 8; i++) {
-        dest[idx+i] = (value & (1 << i)) ? 1 : 0;
+        dest[index+i] = (value & (1 << i)) ? 1 : 0;
     }
 }
 
-/* Sets many bits from a table of bytes (only the bits between idx and
-   idx + nb_bits are set) */
-void modbus_set_bits_from_bytes(uint8_t *dest, int idx, unsigned int nb_bits,
+/* Sets many bits from a table of bytes (only the bits between index and
+   index + nb_bits are set) */
+void modbus_set_bits_from_bytes(uint8_t *dest, int index, unsigned int nb_bits,
                                 const uint8_t *tab_byte)
 {
     unsigned int i;
     int shift = 0;
 
-    for (i = idx; i < idx + nb_bits; i++) {
-        dest[i] = tab_byte[(i - idx) / 8] & (1 << shift) ? 1 : 0;
+    for (i = index; i < index + nb_bits; i++) {
+        dest[i] = tab_byte[(i - index) / 8] & (1 << shift) ? 1 : 0;
         /* gcc doesn't like: shift = (++shift) % 8; */
         shift++;
         shift %= 8;
@@ -93,7 +90,7 @@ void modbus_set_bits_from_bytes(uint8_t *dest, int idx, unsigned int nb_bits,
 
 /* Gets the byte value from many bits.
    To obtain a full byte, set nb_bits to 8. */
-uint8_t modbus_get_byte_from_bits(const uint8_t *src, int idx,
+uint8_t modbus_get_byte_from_bits(const uint8_t *src, int index,
                                   unsigned int nb_bits)
 {
     unsigned int i;
@@ -106,7 +103,7 @@ uint8_t modbus_get_byte_from_bits(const uint8_t *src, int idx,
     }
 
     for (i=0; i < nb_bits; i++) {
-        value |= (src[idx+i] << i);
+        value |= (src[index+i] << i);
     }
 
     return value;

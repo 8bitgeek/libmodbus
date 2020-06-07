@@ -1,5 +1,5 @@
 /*
- * Copyright © 2001-2013 Stéphane Raimbault <stephane.raimbault@gmail.com>
+ * Copyright © 2001-2011 Stéphane Raimbault <stephane.raimbault@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,30 +16,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MODBUS_H
-#define MODBUS_H
+#ifndef _MODBUS_H_
+#define _MODBUS_H_
 
-/* Add this for macros that defined unix flavor */
-#if (defined(__unix__) || defined(unix)) && !defined(USG)
-	#include <sys/param.h>
-#endif
-
-#ifndef _MSC_VER
-	#include <stdint.h>
-#else
-	#include "stdint.h"
-#endif
-
-#if defined(_CARIBOU_RTOS_)
-	#include <caribou.h>
-	#include <lwip/api.h>
-	#include <lwip/tcp.h>
-	#include "modbus-version.h"
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <caribou.h>
+#include <lwip/api.h>
+#include <lwip/tcp.h>
+#include <lwip/sockets.h>
+#include <modbus-version.h>
 
 #if defined(_MSC_VER)
 # if defined(DLLBUILD)
@@ -62,6 +46,18 @@ extern "C" {
 
 MODBUS_BEGIN_DECLS
 
+#ifndef MODBUS_FPRINTF
+	#define MODBUS_FPRINTF	fprintf
+#endif
+
+#ifndef MODBUS_PRINTF
+	#define MODBUS_PRINTF	debug_printf
+#endif
+
+#ifndef SOCK_NONBLOCK
+	#define SOCK_NONBLOCK	1
+#endif
+
 #ifndef FALSE
 #define FALSE 0
 #endif
@@ -77,20 +73,6 @@ MODBUS_BEGIN_DECLS
 #ifndef ON
 #define ON 1
 #endif
-
-/* Modbus function codes */
-#define MODBUS_FC_READ_COILS                0x01
-#define MODBUS_FC_READ_DISCRETE_INPUTS      0x02
-#define MODBUS_FC_READ_HOLDING_REGISTERS    0x03
-#define MODBUS_FC_READ_INPUT_REGISTERS      0x04
-#define MODBUS_FC_WRITE_SINGLE_COIL         0x05
-#define MODBUS_FC_WRITE_SINGLE_REGISTER     0x06
-#define MODBUS_FC_READ_EXCEPTION_STATUS     0x07
-#define MODBUS_FC_WRITE_MULTIPLE_COILS      0x0F
-#define MODBUS_FC_WRITE_MULTIPLE_REGISTERS  0x10
-#define MODBUS_FC_REPORT_SLAVE_ID           0x11
-#define MODBUS_FC_MASK_WRITE_REGISTER       0x16
-#define MODBUS_FC_WRITE_AND_READ_REGISTERS  0x17
 
 #define MODBUS_BROADCAST_ADDRESS    0
 
@@ -113,18 +95,6 @@ MODBUS_BEGIN_DECLS
 #define MODBUS_MAX_WRITE_REGISTERS         123
 #define MODBUS_MAX_WR_WRITE_REGISTERS      121
 #define MODBUS_MAX_WR_READ_REGISTERS       125
-
-/* The size of the MODBUS PDU is limited by the size constraint inherited from
- * the first MODBUS implementation on Serial Line network (max. RS485 ADU = 256
- * bytes). Therefore, MODBUS PDU for serial line communication = 256 - Server
- * address (1 byte) - CRC (2 bytes) = 253 bytes.
- *
- * Consequently:
- * - RS232 / RS485 ADU = 253 bytes + Server address (1 byte) + CRC (2 bytes) =
- *   256 bytes.
- * - TCP MODBUS ADU = 253 bytes + MBAP (7 bytes) = 260 bytes.
- */
-#define MODBUS_MAX_PDU_LENGTH              253
 
 /* Random number to avoid errno conflicts */
 #define MODBUS_ENOBASE 112345678
@@ -185,7 +155,7 @@ typedef enum
 {
     MODBUS_ERROR_RECOVERY_NONE          = 0,
     MODBUS_ERROR_RECOVERY_LINK          = (1<<1),
-    MODBUS_ERROR_RECOVERY_PROTOCOL      = (1<<2)
+    MODBUS_ERROR_RECOVERY_PROTOCOL      = (1<<2),
 } modbus_error_recovery_mode;
 
 MODBUS_API int modbus_set_slave(modbus_t* ctx, int slave);
@@ -193,11 +163,11 @@ MODBUS_API int modbus_set_error_recovery(modbus_t *ctx, modbus_error_recovery_mo
 MODBUS_API int modbus_set_socket(modbus_t *ctx, int s);
 MODBUS_API int modbus_get_socket(modbus_t *ctx);
 
-MODBUS_API int modbus_get_response_timeout(modbus_t *ctx, uint32_t *to_sec, uint32_t *to_usec);
-MODBUS_API int modbus_set_response_timeout(modbus_t *ctx, uint32_t to_sec, uint32_t to_usec);
+MODBUS_API int modbus_get_response_timeout(modbus_t *ctx, caribou_tick_t *timeout);
+MODBUS_API int modbus_set_response_timeout(modbus_t *ctx, caribou_tick_t timeout);
 
-MODBUS_API int modbus_get_byte_timeout(modbus_t *ctx, uint32_t *to_sec, uint32_t *to_usec);
-MODBUS_API int modbus_set_byte_timeout(modbus_t *ctx, uint32_t to_sec, uint32_t to_usec);
+MODBUS_API int modbus_get_byte_timeout(modbus_t *ctx, caribou_tick_t *timeout);
+MODBUS_API int modbus_set_byte_timeout(modbus_t *ctx, caribou_tick_t timeout);
 
 MODBUS_API int modbus_get_header_length(modbus_t *ctx);
 
@@ -221,9 +191,9 @@ MODBUS_API int modbus_write_bits(modbus_t *ctx, int addr, int nb, const uint8_t 
 MODBUS_API int modbus_write_registers(modbus_t *ctx, int addr, int nb, const uint16_t *data);
 MODBUS_API int modbus_mask_write_register(modbus_t *ctx, int addr, uint16_t and_mask, uint16_t or_mask);
 MODBUS_API int modbus_write_and_read_registers(modbus_t *ctx, int write_addr, int write_nb,
-                                               const uint16_t *src, int read_addr, int read_nb,
-                                               uint16_t *dest);
-MODBUS_API int modbus_report_slave_id(modbus_t *ctx, int max_dest, uint8_t *dest);
+                                           const uint16_t *src, int read_addr, int read_nb,
+                                           uint16_t *dest);
+MODBUS_API int modbus_report_slave_id(modbus_t *ctx, uint8_t *dest);
 
 MODBUS_API modbus_mapping_t* modbus_mapping_new(int nb_bits, int nb_input_bits,
                                             int nb_registers, int nb_input_registers);
@@ -232,13 +202,14 @@ MODBUS_API void modbus_mapping_free(modbus_mapping_t *mb_mapping);
 MODBUS_API int modbus_send_raw_request(modbus_t *ctx, uint8_t *raw_req, int raw_req_length);
 
 MODBUS_API int modbus_receive(modbus_t *ctx, uint8_t *req);
+MODBUS_API int modbus_receive_from(modbus_t *ctx, int sockfd, uint8_t *req);
 
 MODBUS_API int modbus_receive_confirmation(modbus_t *ctx, uint8_t *rsp);
 
 MODBUS_API int modbus_reply(modbus_t *ctx, const uint8_t *req,
-                            int req_length, modbus_mapping_t *mb_mapping);
+                        int req_length, modbus_mapping_t *mb_mapping);
 MODBUS_API int modbus_reply_exception(modbus_t *ctx, const uint8_t *req,
-                                      unsigned int exception_code);
+                                  unsigned int exception_code);
 
 /**
  * UTILS FUNCTIONS
@@ -254,22 +225,18 @@ MODBUS_API int modbus_reply_exception(modbus_t *ctx, const uint8_t *req,
         tab_int8[(index) + 1] = (value) & 0xFF; \
     } while (0)
 
-MODBUS_API void modbus_set_bits_from_byte(uint8_t *dest, int idx, const uint8_t value);
-MODBUS_API void modbus_set_bits_from_bytes(uint8_t *dest, int idx, unsigned int nb_bits,
+MODBUS_API void modbus_set_bits_from_byte(uint8_t *dest, int index, const uint8_t value);
+MODBUS_API void modbus_set_bits_from_bytes(uint8_t *dest, int index, unsigned int nb_bits,
                                        const uint8_t *tab_byte);
-MODBUS_API uint8_t modbus_get_byte_from_bits(const uint8_t *src, int idx, unsigned int nb_bits);
+MODBUS_API uint8_t modbus_get_byte_from_bits(const uint8_t *src, int index, unsigned int nb_bits);
 MODBUS_API float modbus_get_float(const uint16_t *src);
 MODBUS_API float modbus_get_float_dcba(const uint16_t *src);
 MODBUS_API void modbus_set_float(float f, uint16_t *dest);
 MODBUS_API void modbus_set_float_dcba(float f, uint16_t *dest);
 
-#ifdef __cplusplus
-}
-#endif
-
-#include "modbus-tcp.h"
-#include "modbus-rtu.h"
+#include <modbus-tcp.h>
+#include <modbus-rtu.h>
 
 MODBUS_END_DECLS
 
-#endif  /* MODBUS_H */
+#endif  /* _MODBUS_H_ */

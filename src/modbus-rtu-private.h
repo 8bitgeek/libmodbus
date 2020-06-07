@@ -16,21 +16,29 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MODBUS_RTU_PRIVATE_H
-#define MODBUS_RTU_PRIVATE_H
+#ifndef _MODBUS_RTU_PRIVATE_H_
+#define _MODBUS_RTU_PRIVATE_H_
 
-#ifndef _MSC_VER
-#include <stdint.h>
-#else
-#include "stdint.h"
-#endif
-
-#if defined(_WIN32)
-	#include <windows.h>
-#elif defined(_CARIBOU_RTOS_)
+#if defined(_CARIBOU_RTOS_)
 	#include <caribou.h>
 #else
-	#include <termios.h>
+	#ifndef _MSC_VER
+		#include <stdint.h>
+	#else
+		#include "stdint.h"
+	#endif
+
+	#if defined(_WIN32)
+		#include <windows.h>
+	#else
+		#include <termios.h>
+	#endif
+#endif /* _CARIBOU_RTOS_ */
+
+#if defined(_CARIBOU_RTOS_)
+	#define MODBUS_PRINTF	debug_printf
+#else
+	#define MODBUS_PRINTF	printf
 #endif
 
 #define _MODBUS_RTU_HEADER_LENGTH      1
@@ -41,7 +49,14 @@
 
 /* Time waited beetween the RTS switch before transmit data or after transmit
    data before to read */
-#define _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH 10000
+#if defined(_CARIBOU_RTOS_)
+	#define _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH 0
+	#if !defined(ENOTSUP)
+		#define ENOTSUP EOPNOTSUPP
+	#endif
+#else
+	#define _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH 10000
+#endif
 
 #if defined(_WIN32)
 #if !defined(ENOTSUP)
@@ -71,29 +86,30 @@ typedef struct _modbus_rtu {
     uint8_t stop_bit;
     /* Parity: 'N', 'O', 'E' */
     char parity;
+
 #if defined(_CARIBOU_RTOS_)
-	int serial_mode;
-	caribou_gpio_t* dir;
-	stdio_t* tios;
-	int rts;
+	caribou_gpio_t*	rs485_dir;
+    FILE* fp;
+	int fd;
+    int serial_mode;
+    caribou_tick_t timeout;
+#elif defined(_WIN32)
+    struct win32_ser w_ser;
+    DCB old_dcb;
 #else
-	#if defined(_WIN32)
-		struct win32_ser w_ser;
-		DCB old_dcb;
-	#else
-		/* Save old termios settings */
-		struct termios old_tios;
-	#endif
-	#if HAVE_DECL_TIOCSRS485
-		int serial_mode;
-	#endif
-	#if HAVE_DECL_TIOCM_RTS
-		int rts;
-		int onebyte_time;
-	#endif
+    /* Save old termios settings */
+    struct termios old_tios;
+#endif
+
+#if HAVE_DECL_TIOCSRS485
+    int serial_mode;
+#endif
+#if HAVE_DECL_TIOCM_RTS
+    int rts;
+    int onebyte_time;
 #endif
     /* To handle many slaves on the same link */
     int confirmation_to_ignore;
 } modbus_rtu_t;
 
-#endif /* MODBUS_RTU_PRIVATE_H */
+#endif /* _MODBUS_RTU_PRIVATE_H_ */

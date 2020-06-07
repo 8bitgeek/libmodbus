@@ -16,32 +16,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MODBUS_PRIVATE_H
-#define MODBUS_PRIVATE_H
+#ifndef _MODBUS_PRIVATE_H_
+#define _MODBUS_PRIVATE_H_
 
-#if defined(_CARIBOU_RTOS_)
-	#include <caribou.h>
-	#include <caribou/kernel/timer.h>
-	#include <lwip/sockets.h>
-	#include <lwip/api.h>
-	#include <lwip/tcp.h>
-	typedef int ssize_t;
-	#include <config.h>
-	#include <modbus.h>
-#else
-	#ifndef _MSC_VER
-	# include <stdint.h>
-	# include <sys/time.h>
-	#else
-	# include "stdint.h"
-	# include <time.h>
-	typedef int ssize_t;
-	#endif
-	#include <sys/types.h>
-	#include <config.h>
-#endif /* CARIBOU_RTOS */
-
-#include "modbus.h"
+#include <caribou.h>
+#include <lwip/sockets.h>
+#include <lwip/api.h>
+#include <lwip/tcp.h>
+typedef int ssize_t;
+#include <config.h>
+#include <modbus.h>
 
 MODBUS_BEGIN_DECLS
 
@@ -58,9 +42,23 @@ MODBUS_BEGIN_DECLS
 
 #define _MODBUS_EXCEPTION_RSP_LENGTH 5
 
-/* Timeouts in microsecond (0.5 s) */
-#define _RESPONSE_TIMEOUT    500000
-#define _BYTE_TIMEOUT        500000
+/* Timeouts in milliseconds (0.5 s) */
+#define _RESPONSE_TIMEOUT    5
+#define _BYTE_TIMEOUT        5
+
+/* Function codes */
+#define _FC_READ_COILS                0x01
+#define _FC_READ_DISCRETE_INPUTS      0x02
+#define _FC_READ_HOLDING_REGISTERS    0x03
+#define _FC_READ_INPUT_REGISTERS      0x04
+#define _FC_WRITE_SINGLE_COIL         0x05
+#define _FC_WRITE_SINGLE_REGISTER     0x06
+#define _FC_READ_EXCEPTION_STATUS     0x07
+#define _FC_WRITE_MULTIPLE_COILS      0x0F
+#define _FC_WRITE_MULTIPLE_REGISTERS  0x10
+#define _FC_REPORT_SLAVE_ID           0x11
+#define _FC_MASK_WRITE_REGISTER       0x16
+#define _FC_WRITE_AND_READ_REGISTERS  0x17
 
 typedef enum {
     _MODBUS_BACKEND_TYPE_RTU=0,
@@ -108,7 +106,7 @@ typedef struct _modbus_backend {
     int (*connect) (modbus_t *ctx);
     void (*close) (modbus_t *ctx);
     int (*flush) (modbus_t *ctx);
-    int (*select) (modbus_t *ctx, fd_set *rset, struct timeval *tv, int msg_length);
+    int (*select) (modbus_t *ctx, caribou_tick_t tv, int msg_length);
     void (*free) (modbus_t *ctx);
 } modbus_backend_t;
 
@@ -116,16 +114,11 @@ struct _modbus {
     /* Slave address */
     int slave;
     /* Socket or file descriptor */
-    int s;
+	int s;
     int debug;
     int error_recovery;
-#if defined(_CARIBOU_RTOS_)
 	caribou_tick_t response_timeout;
     caribou_tick_t byte_timeout;
-#else
-    struct timeval response_timeout;
-    struct timeval byte_timeout;
-#endif
     const modbus_backend_t *backend;
     void *backend_data;
 };
@@ -140,4 +133,4 @@ size_t strlcpy(char *dest, const char *src, size_t dest_size);
 
 MODBUS_END_DECLS
 
-#endif  /* MODBUS_PRIVATE_H */
+#endif  /* _MODBUS_PRIVATE_H_ */

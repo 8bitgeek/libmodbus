@@ -16,24 +16,15 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if defined(_CARIBOU_RTOS_)
-	#include <caribou.h>
-	#include <caribou/lib/stdio.h>
-	#include <caribou/lib/stdint.h>
-	#include <caribou/lib/errno.h>
-	#include <caribou/lib/string.h>
-	#include <caribou/dev/gpio.h>
-#else
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <errno.h>
-	#include <fcntl.h>
-	#include <string.h>
-	#ifndef _MSC_VER
-	#include <unistd.h>
-	#endif
-	#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#ifndef _MSC_VER
+#include <unistd.h>
 #endif
+#include <assert.h>
 
 #include "modbus-private.h"
 
@@ -202,7 +193,7 @@ static void win32_ser_init(struct win32_ser *ws) {
 
 /* FIXME Try to remove length_to_read -> max_len argument, only used by win32 */
 static int win32_ser_select(struct win32_ser *ws, int max_len,
-                            const struct timeval *tv) {
+                            struct timeval *tv) {
     COMMTIMEOUTS comm_to;
     unsigned int msec = 0;
 
@@ -284,60 +275,37 @@ static void _modbus_rtu_ioctl_rts(int fd, int on)
 }
 #endif
 
-#if defined(__CARIBOU_RTOS__)
-extern int caribou_modbus_flush(stdio_t* io)
-{
-	int fd = _fd(io);
-	while( !caribou_bytequeue_empty(caribou_uart_tx_queue(fd)) )
-	{
-		chip_uart_tx_start(io->device_private);
-		caribou_thread_yield();
-	}
-	while ( chip_uart_tx_busy(io->device_private) )
-	{
-		caribou_thread_yield();
-	}
-	return 0;
-}
-#endif
-
 static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_length)
 {
 #if defined(_WIN32)
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
     DWORD n_bytes = 0;
-    return (WriteFile(ctx_rtu->w_ser.fd, req, req_length, &n_bytes, NULL)) ? (ssize_t)n_bytes : -1;
+    return (WriteFile(ctx_rtu->w_ser.fd, req, req_length, &n_bytes, NULL)) ? n_bytes : -1;
 #else
-	#if HAVE_DECL_TIOCM_RTS
+#if HAVE_DECL_TIOCM_RTS
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
-		if (ctx_rtu->rts != MODBUS_RTU_RTS_NONE) {
-			ssize_t size;
+    if (ctx_rtu->rts != MODBUS_RTU_RTS_NONE) {
+        ssize_t size;
 
-			if (ctx->debug) {
-				fprintf(stderr, "Sending request using RTS signal\n");
-			}
+        if (ctx->debug) {
+            fprintf(stderr, "Sending request using RTS signal\n");
+        }
 
-			_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
-			usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
+        _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts == MODBUS_RTU_RTS_UP);
+        usleep(_MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
 
-			size = write(ctx->s, req, req_length);
+        size = write(ctx->s, req, req_length);
 
-			usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
-			_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
+        usleep(ctx_rtu->onebyte_time * req_length + _MODBUS_RTU_TIME_BETWEEN_RTS_SWITCH);
+        _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
 
-			return size;
-		} else {
-	#endif
-	ssize_t size;
-	modbus_rtu_t *ctx_rtu = ctx->backend_data;
-	caribou_gpio_set(ctx_rtu->dir);
-	size = fwrite(req,1,req_length,ctx->s);
-	fflush(ctx->s);
-	caribou_gpio_reset(ctx_rtu->dir);
-	return size;
-	#if HAVE_DECL_TIOCM_RTS
-		}
-	#endif
+        return size;
+    } else {
+#endif
+        return write(ctx->s, req, req_length);
+#if HAVE_DECL_TIOCM_RTS
+    }
+#endif
 #endif
 }
 
@@ -346,8 +314,7 @@ static int _modbus_rtu_receive(modbus_t *ctx, uint8_t *req)
     int rc;
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
-    if (ctx_rtu->confirmation_to_ignore) 
-	{
+    if (ctx_rtu->confirmation_to_ignore) {
         _modbus_receive_msg(ctx, req, MSG_CONFIRMATION);
         /* Ignore errors and reset the flag */
         ctx_rtu->confirmation_to_ignore = FALSE;
@@ -355,12 +322,9 @@ static int _modbus_rtu_receive(modbus_t *ctx, uint8_t *req)
         if (ctx->debug) {
             printf("Confirmation to ignore\n");
         }
-    } 
-	else 
-	{
+    } else {
         rc = _modbus_receive_msg(ctx, req, MSG_INDICATION);
-        if (rc == 0) 
-		{
+        if (rc == 0) {
             /* The next expected message is a confirmation to ignore */
             ctx_rtu->confirmation_to_ignore = TRUE;
         }
@@ -373,32 +337,26 @@ static ssize_t _modbus_rtu_recv(modbus_t *ctx, uint8_t *rsp, int rsp_length)
 #if defined(_WIN32)
     return win32_ser_read(&((modbus_rtu_t *)ctx->backend_data)->w_ser, rsp, rsp_length);
 #else
-	int ch;
-	int cnt;
-	for(cnt=0; (cnt<rsp_length) && (ch=fgetc(ctx->s))>=0; cnt++)
-	{
-		rsp[cnt] = ch;
-	}
-    return cnt;
+    return read(ctx->s, rsp, rsp_length);
 #endif
 }
 
 static int _modbus_rtu_flush(modbus_t *);
 
-static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req, const uint8_t *rsp, int rsp_length)
+static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
+                                              const uint8_t *rsp, int rsp_length)
 {
-    /* Check responding slave is the slave we requested (except for broadcast request) */
-    if (req[0] != rsp[0] && req[0] != MODBUS_BROADCAST_ADDRESS) 
-	{
-        if (ctx->debug) 
-		{
-            fprintf(stderr,"The responding slave %d isn't the requested slave %d\n",rsp[0], req[0]);
+    /* Check responding slave is the slave we requested (except for broacast
+     * request) */
+    if (req[0] != rsp[0] && req[0] != MODBUS_BROADCAST_ADDRESS) {
+        if (ctx->debug) {
+            fprintf(stderr,
+                    "The responding slave %d isn't the requested slave %d\n",
+                    rsp[0], req[0]);
         }
         errno = EMBBADSLAVE;
         return -1;
-    } 
-	else 
-	{
+    } else {
         return 0;
     }
 }
@@ -406,7 +364,8 @@ static int _modbus_rtu_pre_check_confirmation(modbus_t *ctx, const uint8_t *req,
 /* The check_crc16 function shall return 0 is the message is ignored and the
    message length if the CRC is valid. Otherwise it shall return -1 and set
    errno to EMBADCRC. */
-static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int msg_length)
+static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg,
+                                       const int msg_length)
 {
     uint16_t crc_calculated;
     uint16_t crc_received;
@@ -414,10 +373,8 @@ static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int ms
 
     /* Filter on the Modbus unit identifier (slave) in RTU mode to avoid useless
      * CRC computing. */
-    if (slave != ctx->slave && slave != MODBUS_BROADCAST_ADDRESS) 
-	{
-        if (ctx->debug) 
-		{
+    if (slave != ctx->slave && slave != MODBUS_BROADCAST_ADDRESS) {
+        if (ctx->debug) {
             printf("Request for slave %d ignored (not %d)\n", slave, ctx->slave);
         }
         /* Following call to check_confirmation handles this error */
@@ -428,90 +385,21 @@ static int _modbus_rtu_check_integrity(modbus_t *ctx, uint8_t *msg, const int ms
     crc_received = (msg[msg_length - 2] << 8) | msg[msg_length - 1];
 
     /* Check CRC of msg */
-    if (crc_calculated == crc_received) 
-	{
+    if (crc_calculated == crc_received) {
         return msg_length;
-    } 
-	else 
-	{
-        if (ctx->debug) 
-		{
-            fprintf(stderr, "ERROR CRC received 0x%0X != CRC calculated 0x%0X\n",
+    } else {
+        if (ctx->debug) {
+            fprintf(stderr, "ERROR CRC received %0X != CRC calculated %0X\n",
                     crc_received, crc_calculated);
         }
 
-        if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_PROTOCOL) 
-		{
+        if (ctx->error_recovery & MODBUS_ERROR_RECOVERY_PROTOCOL) {
             _modbus_rtu_flush(ctx);
         }
         errno = EMBBADCRC;
         return -1;
     }
 }
-
-#if defined(_CARIBOU_RTOS_)
-
-static int _modbus_rtu_connect(modbus_t *ctx)
-{
-    modbus_rtu_t *ctx_rtu = ctx->backend_data;
-    if (ctx->debug) 
-	{
-		#if 0
-        printf("Opening %08X at %d bauds (%c, %d, %d)\n",
-               ctx_rtu->device, ctx_rtu->baud, ctx_rtu->parity,
-               ctx_rtu->data_bit, ctx_rtu->stop_bit);
-		#endif
-    }
-	ctx->s = ctx_rtu->device;
-
-#if 0
-    caribou_uart_config_t	uart_config;
-	memset(&uart_config,0,sizeof(caribou_uart_config_t));
-
-	switch(ctx_rtu->baud)
-	{
-		case 2400:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_2400;	break;
-		case 4800:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_4800;	break;
-		case 9600:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_9600;	break;
-		case 19200:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_19200;	break;
-		case 38400:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_38400;	break;
-		case 57600:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_57600;	break;
-		case 115200:	uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_115200;	break;
-		default:
-		case 230400:	uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_230400;	break;
-	}
-
-	switch(ctx_rtu->parity)
-	{
-		case 'E':		uart_config.parity_bits = CARIBOU_UART_PARITY_EVEN;		break;
-		case 'O':		uart_config.parity_bits = CARIBOU_UART_PARITY_ODD;		break;
-		default:
-		case 'N':		uart_config.parity_bits = CARIBOU_UART_PARITY_NONE;		break;
-	}
-	
-	switch(ctx_rtu->data_bit)
-	{
-		case 7:			uart_config.word_size = CARIBOU_UART_WORDSIZE_7;		break;
-		default:
-		case 8:			uart_config.word_size = CARIBOU_UART_WORDSIZE_8;		break;
-	}
-
-	switch(ctx_rtu->stop_bit)
-	{
-		case 2:			uart_config.parity_bits = CARIBOU_UART_STOPBITS_2;		break;
-		default:
-		case 1:			uart_config.parity_bits = CARIBOU_UART_STOPBITS_1;		break;
-	}
-
-	caribou_uart_set_config(_fd(ctx_rtu->device),&uart_config);
-#endif
-	int ch;
-	while((ch=fgetc(ctx->s))>=0);
-	fflush(ctx->s);
-	return 0;
-}
-
-#else /* CARIBOU_RTOS */
 
 /* Sets up a serial port for RTU communications */
 static int _modbus_rtu_connect(modbus_t *ctx)
@@ -549,20 +437,16 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 
     /* Error checking */
     if (ctx_rtu->w_ser.fd == INVALID_HANDLE_VALUE) {
-        if (ctx->debug) {
-            fprintf(stderr, "ERROR Can't open the device %s (LastError %d)\n",
-                    ctx_rtu->device, (int)GetLastError());
-        }
+        fprintf(stderr, "ERROR Can't open the device %s (LastError %d)\n",
+                ctx_rtu->device, (int)GetLastError());
         return -1;
     }
 
     /* Save params */
     ctx_rtu->old_dcb.DCBlength = sizeof(DCB);
     if (!GetCommState(ctx_rtu->w_ser.fd, &ctx_rtu->old_dcb)) {
-        if (ctx->debug) {
-            fprintf(stderr, "ERROR Error getting configuration (LastError %d)\n",
-                    (int)GetLastError());
-        }
+        fprintf(stderr, "ERROR Error getting configuration (LastError %d)\n",
+                (int)GetLastError());
         CloseHandle(ctx_rtu->w_ser.fd);
         ctx_rtu->w_ser.fd = INVALID_HANDLE_VALUE;
         return -1;
@@ -630,10 +514,8 @@ static int _modbus_rtu_connect(modbus_t *ctx)
         break;
     default:
         dcb.BaudRate = CBR_9600;
-        if (ctx->debug) {
-            fprintf(stderr, "WARNING Unknown baud rate %d for %s (B9600 used)\n",
-                    ctx_rtu->baud, ctx_rtu->device);
-        }
+        printf("WARNING Unknown baud rate %d for %s (B9600 used)\n",
+               ctx_rtu->baud, ctx_rtu->device);
     }
 
     /* Data bits */
@@ -687,10 +569,8 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 
     /* Setup port */
     if (!SetCommState(ctx_rtu->w_ser.fd, &dcb)) {
-        if (ctx->debug) {
-            fprintf(stderr, "ERROR Error setting new configuration (LastError %d)\n",
-                    (int)GetLastError());
-        }
+        fprintf(stderr, "ERROR Error setting new configuration (LastError %d)\n",
+                (int)GetLastError());
         CloseHandle(ctx_rtu->w_ser.fd);
         ctx_rtu->w_ser.fd = INVALID_HANDLE_VALUE;
         return -1;
@@ -710,10 +590,8 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 
     ctx->s = open(ctx_rtu->device, flags);
     if (ctx->s == -1) {
-        if (ctx->debug) {
-            fprintf(stderr, "ERROR Can't open the device %s (%s)\n",
-                    ctx_rtu->device, strerror(errno));
-        }
+        fprintf(stderr, "ERROR Can't open the device %s (%s)\n",
+                ctx_rtu->device, strerror(errno));
         return -1;
     }
 
@@ -1018,16 +896,6 @@ static int _modbus_rtu_connect(modbus_t *ctx)
     return 0;
 }
 
-#endif /* CARIBOU_RTOS */
-
-#if defined(_CARIBOU_RTOS_)
-int modbus_rtu_set_serial_mode(modbus_t *ctx, int mode)
-{
-	return 0;
-}
-
-#else
-
 int modbus_rtu_set_serial_mode(modbus_t *ctx, int mode)
 {
     if (ctx == NULL) {
@@ -1074,8 +942,6 @@ int modbus_rtu_set_serial_mode(modbus_t *ctx, int mode)
     return -1;
 }
 
-#endif /* CARIBOU_RTOS */
-
 int modbus_rtu_get_serial_mode(modbus_t *ctx)
 {
     if (ctx == NULL) {
@@ -1084,10 +950,7 @@ int modbus_rtu_get_serial_mode(modbus_t *ctx)
     }
 
     if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
-#if defined(_CARIBOU_RTOS_)
-        modbus_rtu_t *ctx_rtu = ctx->backend_data;
-        return ctx_rtu->serial_mode;
-#elif HAVE_DECL_TIOCSRS485
+#if HAVE_DECL_TIOCSRS485
         modbus_rtu_t *ctx_rtu = ctx->backend_data;
         return ctx_rtu->serial_mode;
 #else
@@ -1110,37 +973,29 @@ int modbus_rtu_set_rts(modbus_t *ctx, int mode)
         return -1;
     }
 
-    if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) 
-	{
-		#if defined(_CARIBOU_RTOS_)
-			modbus_rtu_t *ctx_rtu = ctx->backend_data;
-			if ( mode )
-				cairbou_gpio_set(ctx_rtu->dir);
-			else
-				cairbou_gpio_reset(ctx_rtu->dir);
-			ctx_rtu->rts = mode;
-		#elif HAVE_DECL_TIOCM_RTS
-			modbus_rtu_t *ctx_rtu = ctx->backend_data;
+    if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
+#if HAVE_DECL_TIOCM_RTS
+        modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
-			if (mode == MODBUS_RTU_RTS_NONE || mode == MODBUS_RTU_RTS_UP ||
-				mode == MODBUS_RTU_RTS_DOWN) {
-				ctx_rtu->rts = mode;
+        if (mode == MODBUS_RTU_RTS_NONE || mode == MODBUS_RTU_RTS_UP ||
+            mode == MODBUS_RTU_RTS_DOWN) {
+            ctx_rtu->rts = mode;
 
-				/* Set the RTS bit in order to not reserve the RS485 bus */
-				_modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
+            /* Set the RTS bit in order to not reserve the RS485 bus */
+            _modbus_rtu_ioctl_rts(ctx->s, ctx_rtu->rts != MODBUS_RTU_RTS_UP);
 
-				return 0;
-			} else {
-				errno = EINVAL;
-				return -1;
-			}
-		#else
-			if (ctx->debug) {
-				fprintf(stderr, "This function isn't supported on your platform\n");
-			}
-			errno = ENOTSUP;
-			return -1;
-		#endif
+            return 0;
+        } else {
+            errno = EINVAL;
+            return -1;
+        }
+#else
+        if (ctx->debug) {
+            fprintf(stderr, "This function isn't supported on your platform\n");
+        }
+        errno = ENOTSUP;
+        return -1;
+#endif
     }
     /* Wrong backend or invalid mode specified */
     errno = EINVAL;
@@ -1154,21 +1009,17 @@ int modbus_rtu_get_rts(modbus_t *ctx)
         return -1;
     }
 
-    if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) 
-	{
-		#if defined(_CARIBOU_RTOS_)
-			modbus_rtu_t *ctx_rtu = ctx->backend_data;
-			return ctx_rtu->rts;
-		#elif HAVE_DECL_TIOCM_RTS
-			modbus_rtu_t *ctx_rtu = ctx->backend_data;
-			return ctx_rtu->rts;
-		#else
-			if (ctx->debug) {
-				fprintf(stderr, "This function isn't supported on your platform\n");
-			}
-			errno = ENOTSUP;
-			return -1;
-		#endif
+    if (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_RTU) {
+#if HAVE_DECL_TIOCM_RTS
+        modbus_rtu_t *ctx_rtu = ctx->backend_data;
+        return ctx_rtu->rts;
+#else
+        if (ctx->debug) {
+            fprintf(stderr, "This function isn't supported on your platform\n");
+        }
+        errno = ENOTSUP;
+        return -1;
+#endif
     } else {
         errno = EINVAL;
         return -1;
@@ -1180,19 +1031,15 @@ static void _modbus_rtu_close(modbus_t *ctx)
     /* Restore line settings and close file descriptor in RTU mode */
     modbus_rtu_t *ctx_rtu = ctx->backend_data;
 
-#if defined(_CARIBOU_RTOS_)
-	/* FIXME */
-#elif defined(_WIN32)
+#if defined(_WIN32)
     /* Revert settings */
-    if (!SetCommState(ctx_rtu->w_ser.fd, &ctx_rtu->old_dcb) && ctx->debug) {
+    if (!SetCommState(ctx_rtu->w_ser.fd, &ctx_rtu->old_dcb))
         fprintf(stderr, "ERROR Couldn't revert to configuration (LastError %d)\n",
                 (int)GetLastError());
-    }
 
-    if (!CloseHandle(ctx_rtu->w_ser.fd) && ctx->debug) {
+    if (!CloseHandle(ctx_rtu->w_ser.fd))
         fprintf(stderr, "ERROR Error while closing handle (LastError %d)\n",
                 (int)GetLastError());
-    }
 #else
     if (ctx->s != -1) {
         tcsetattr(ctx->s, TCSANOW, &(ctx_rtu->old_tios));
@@ -1204,15 +1051,13 @@ static void _modbus_rtu_close(modbus_t *ctx)
 
 static int _modbus_rtu_flush(modbus_t *ctx)
 {
-	#if defined(_CARIBOU_RTOS_)
-		return fflush(ctx->s);
-	#elif defined(_WIN32)
-		modbus_rtu_t *ctx_rtu = ctx->backend_data;
-		ctx_rtu->w_ser.n_bytes = 0;
-		return (PurgeComm(ctx_rtu->w_ser.fd, PURGE_RXCLEAR) == FALSE);
-	#else
-		return tcflush(ctx->s, TCIOFLUSH);
-	#endif
+#if defined(_WIN32)
+    modbus_rtu_t *ctx_rtu = ctx->backend_data;
+    ctx_rtu->w_ser.n_bytes = 0;
+    return (FlushFileBuffers(ctx_rtu->w_ser.fd) == FALSE);
+#else
+    return tcflush(ctx->s, TCIOFLUSH);
+#endif
 }
 
 static int _modbus_rtu_select(modbus_t *ctx, fd_set *rset,
@@ -1231,7 +1076,7 @@ static int _modbus_rtu_select(modbus_t *ctx, fd_set *rset,
         return -1;
     }
 #else
-    while ((s_rc = lwip_select(ctx->s+1, rset, NULL, NULL, tv)) == -1) {
+    while ((s_rc = select(ctx->s+1, rset, NULL, NULL, tv)) == -1) {
         if (errno == EINTR) {
             if (ctx->debug) {
                 fprintf(stderr, "A non blocked signal was caught\n");
@@ -1254,13 +1099,9 @@ static int _modbus_rtu_select(modbus_t *ctx, fd_set *rset,
     return s_rc;
 }
 
-static void _modbus_rtu_free(modbus_t *ctx) 
-{
-	#if !defined(_CARIBOU_RTOS_)
-		modbus_rtu_t *ctx_rtu = ctx->backend_data;
-		free(ctx_rtu->device);
-    #endif
-	free(ctx->backend_data);
+static void _modbus_rtu_free(modbus_t *ctx) {
+    free(((modbus_rtu_t*)ctx->backend_data)->device);
+    free(ctx->backend_data);
     free(ctx);
 }
 
@@ -1286,42 +1127,30 @@ const modbus_backend_t _modbus_rtu_backend = {
     _modbus_rtu_free
 };
 
-modbus_t* modbus_new_rtu(FILE* device, caribou_gpio_t* dir,
+modbus_t* modbus_new_rtu(const char *device,
                          int baud, char parity, int data_bit,
                          int stop_bit)
 {
     modbus_t *ctx;
     modbus_rtu_t *ctx_rtu;
 
-    /* Check device argument */
-    if (device == NULL) {
-        fprintf(stderr, "The device string is empty\n");
-        errno = EINVAL;
-        return NULL;
-    }
-
-    /* Check baud argument */
-    if (baud == 0) {
-        fprintf(stderr, "The baud rate value must not be zero\n");
-        errno = EINVAL;
-        return NULL;
-    }
-
     ctx = (modbus_t *) malloc(sizeof(modbus_t));
     _modbus_init_common(ctx);
     ctx->backend = &_modbus_rtu_backend;
     ctx->backend_data = (modbus_rtu_t *) malloc(sizeof(modbus_rtu_t));
     ctx_rtu = (modbus_rtu_t *)ctx->backend_data;
-    ctx_rtu->device = NULL;
-	ctx_rtu->dir = dir;
+
+    /* Check device argument */
+    if (device == NULL || (*device) == 0) {
+        fprintf(stderr, "The device string is empty\n");
+        modbus_free(ctx);
+        errno = EINVAL;
+        return NULL;
+    }
 
     /* Device name and \0 */
-	#if defined(_CARIBOU_RTOS_)
-		ctx_rtu->device = device;		
-	#else
-		ctx_rtu->device = (char *) malloc((strlen(device) + 1) * sizeof(char));
-		strcpy(ctx_rtu->device, device);
-	#endif
+    ctx_rtu->device = (char *) malloc((strlen(device) + 1) * sizeof(char));
+    strcpy(ctx_rtu->device, device);
 
     ctx_rtu->baud = baud;
     if (parity == 'N' || parity == 'E' || parity == 'O') {
@@ -1348,57 +1177,6 @@ modbus_t* modbus_new_rtu(FILE* device, caribou_gpio_t* dir,
 #endif
 
     ctx_rtu->confirmation_to_ignore = FALSE;
-
-#if 0
-	caribou_uart_config_t	uart_config;
-	caribou_uart_init_config(&uart_config);
-	uart_config.baud_rate = baud;
-	uart_config.stop_bits = stop_bit;
-	uart_config.word_size = data_bit;
-	caribou_uart_set_config(_fd(device),&uart_config);
-
-	ctx->s = _fd(device);
-#else
-    caribou_uart_config_t	uart_config;
-	memset(&uart_config,0,sizeof(caribou_uart_config_t));
-
-	switch(ctx_rtu->baud)
-	{
-		case 2400:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_2400;	break;
-		case 4800:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_4800;	break;
-		case 9600:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_9600;	break;
-		case 19200:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_19200;	break;
-		case 38400:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_38400;	break;
-		case 57600:		uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_57600;	break;
-		case 115200:	uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_115200;	break;
-		default:
-		case 230400:	uart_config.baud_rate = CARIBOU_UART_BAUD_RATE_230400;	break;
-	}
-
-	switch(ctx_rtu->parity)
-	{
-		case 'E':		uart_config.parity_bits = CARIBOU_UART_PARITY_EVEN;		break;
-		case 'O':		uart_config.parity_bits = CARIBOU_UART_PARITY_ODD;		break;
-		default:
-		case 'N':		uart_config.parity_bits = CARIBOU_UART_PARITY_NONE;		break;
-	}
-	
-	switch(ctx_rtu->data_bit)
-	{
-		case 7:			uart_config.word_size = CARIBOU_UART_WORDSIZE_7;		break;
-		default:
-		case 8:			uart_config.word_size = CARIBOU_UART_WORDSIZE_8;		break;
-	}
-
-	switch(ctx_rtu->stop_bit)
-	{
-		case 2:			uart_config.stop_bits = CARIBOU_UART_STOPBITS_2;		break;
-		default:
-		case 1:			uart_config.stop_bits = CARIBOU_UART_STOPBITS_1;		break;
-	}
-
-	caribou_uart_set_config(_fd(ctx_rtu->device),&uart_config);
-#endif
 
     return ctx;
 }

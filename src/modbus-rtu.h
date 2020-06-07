@@ -16,8 +16,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MODBUS_RTU_H
-#define MODBUS_RTU_H
+#ifndef _MODBUS_RTU_H_
+#define _MODBUS_RTU_H_
 
 #include "modbus.h"
 
@@ -28,8 +28,12 @@ MODBUS_BEGIN_DECLS
  */
 #define MODBUS_RTU_MAX_ADU_LENGTH  256
 
-MODBUS_API modbus_t* modbus_new_rtu(FILE* device, caribou_gpio_t* dir, int baud, char parity,
-                                int data_bit, int stop_bit);
+MODBUS_API modbus_t* modbus_new_rtu(FILE* fp, 
+									caribou_gpio_t* rs485_dir, 
+									int baud, 
+									char parity,
+									int data_bit, 
+									int stop_bit);
 
 #define MODBUS_RTU_RS232 0
 #define MODBUS_RTU_RS485 1
@@ -46,4 +50,4 @@ MODBUS_API int modbus_rtu_get_rts(modbus_t *ctx);
 
 MODBUS_END_DECLS
 
-#endif /* MODBUS_RTU_H */
+#endif /* _MODBUS_RTU_H_ */
