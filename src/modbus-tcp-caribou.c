@@ -12,6 +12,10 @@
 #define MSG_NOSIGNAL 0
 #endif
 
+static int _modbus_tcp_select(modbus_t *ctx, caribou_tick_t ms, int length_to_read);
+static int _modbus_tcp_bytes_available(int s);
+
+
 static int _modbus_set_slave(modbus_t *ctx, int slave)
 {
     /* Broadcast address is 0 (MODBUS_BROADCAST_ADDRESS) */
@@ -397,34 +401,41 @@ int modbus_tcp_pi_accept(modbus_t *ctx, int *s)
 	return -1;
 }
 
-static int _modbus_tcp_select(modbus_t *ctx, fd_set *rset, struct timeval *tv, int length_to_read)
+/*
+ * Return the number of bytes available in the receive queue.
+ * @return <0 on error (errno), return 0 upon other end disconnect, < 0 socket closed
+ */
+static int _modbus_tcp_bytes_available(int s)
 {
-    int s_rc;
-    while ((s_rc = lwip_select(ctx->s+1, rset, NULL, NULL, tv)) == -1) 
-	{
-        if (errno == EINTR) 
-		{
-            if (ctx->debug) 
-			{
-                MODBUS_FPRINTF(stderr, "A non blocked signal was caught");
-            }
-            /* Necessary after an error */
-            FD_ZERO(rset);
-            FD_SET(ctx->s, rset);
-        } 
-		else 
-		{
-            return -1;
+    int rc;
+    char t[32];
+    struct sockaddr_in fromaddr;
+    socklen_t fromlen=sizeof(struct sockaddr_in);
+    rc = lwip_recvfrom(s,t,32,MSG_DONTWAIT|MSG_PEEK,(struct sockaddr*)&fromaddr,&fromlen);
+    if ( rc < 0 )
+    {
+        if ( errno == EAGAIN )
+        {
+            rc = 0;
         }
     }
-
-    if (s_rc == 0) 
-	{
-        errno = ETIMEDOUT;
-        return -1;
+    else if ( rc == 0 )
+    {
+        rc = (-1); /* socket closed. */
     }
+    return rc;
+}
 
-    return s_rc;
+
+static int _modbus_tcp_select(modbus_t *ctx, caribou_tick_t ms, int length_to_read)
+{
+    caribou_tick_t start = caribou_timer_ticks();
+    int rc=0;
+    while( (rc=_modbus_tcp_bytes_available(ctx->s)) == 0 && !caribou_timer_ticks_timeout(start,ms) )
+    {
+        caribou_thread_yield();
+    }
+    return rc;
 }
 
 static void _modbus_tcp_free(modbus_t *ctx) 
