@@ -20,9 +20,11 @@
 #define _MODBUS_PRIVATE_H_
 
 #include <caribou.h>
-#include <lwip/sockets.h>
-#include <lwip/api.h>
-#include <lwip/tcp.h>
+#if defined(MODBUS_TCP)
+    #include <lwip/sockets.h>
+    #include <lwip/api.h>
+    #include <lwip/tcp.h>
+#endif
 typedef int ssize_t;
 #include <config.h>
 #include <modbus.h>

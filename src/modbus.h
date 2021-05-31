@@ -20,9 +20,11 @@
 #define _MODBUS_H_
 
 #include <caribou.h>
+#if defined(MODBUS_TCP)
 #include <lwip/api.h>
 #include <lwip/tcp.h>
 #include <lwip/sockets.h>
+#endif
 #include <modbus-version.h>
 
 #if defined(_MSC_VER)
@@ -234,7 +236,9 @@ MODBUS_API float modbus_get_float_dcba(const uint16_t *src);
 MODBUS_API void modbus_set_float(float f, uint16_t *dest);
 MODBUS_API void modbus_set_float_dcba(float f, uint16_t *dest);
 
-#include <modbus-tcp.h>
+#if defined(MODBUS_TCP)
+    #include <modbus-tcp.h>
+#endif
 #include <modbus-rtu.h>
 
 MODBUS_END_DECLS

@@ -69,6 +69,19 @@ static const uint8_t table_crc_lo[] = {
     0x43, 0x83, 0x41, 0x81, 0x80, 0x40
 };
 
+#define rs485_tx(ctx_rtu) {                                                 \
+    caribou_thread_lock();                                                  \
+    caribou_gpio_set((ctx_rtu)->rs485_dir);                                 \
+    if((ctx_rtu)->nrs485_dir) caribou_gpio_set((ctx_rtu)->nrs485_dir);      \
+    caribou_thread_unlock(); }
+    
+#define rs485_rx(ctx_rtu) {                                                 \
+    caribou_thread_lock();                                                  \
+    caribou_gpio_reset((ctx_rtu)->rs485_dir);                               \
+    if((ctx_rtu)->nrs485_dir) caribou_gpio_reset((ctx_rtu)->nrs485_dir);    \
+    caribou_thread_unlock(); }
+
+
 /* Define the slave ID of the remote device to talk in master mode or set the
  * internal slave ID in slave mode */
 static int _modbus_set_slave(modbus_t *ctx, int slave)
@@ -147,14 +160,14 @@ static ssize_t _modbus_rtu_send(modbus_t *ctx, const uint8_t *req, int req_lengt
 {
 	ssize_t size;
 	modbus_rtu_t *ctx_rtu = ctx->backend_data;
-	caribou_gpio_set(ctx_rtu->rs485_dir);
+    rs485_tx(ctx_rtu);
     size = fwrite( (uint8_t *)req, req_length, 1, ctx_rtu->fp);
 	/* flush the transmit queue */
 	while( caribou_uart_tx_busy(ctx_rtu->fd) || !caribou_bytequeue_empty(caribou_uart_tx_queue(ctx_rtu->fd)) )
 	{
 		caribou_thread_yield();
 	}
-	caribou_gpio_reset(ctx_rtu->rs485_dir);
+    rs485_rx(ctx_rtu);
 	return size;
 }
 
@@ -360,6 +373,9 @@ static int _modbus_rtu_connect(modbus_t *ctx)
 			break;
 	}
 
+	uart_config.dma_mode		= CARIBOU_UART_DMA_RX /* | CARIBOU_UART_DMA_TX */;
+	uart_config.dma_prio		= CARIBOU_UART_DMA_PRIO_HIGH;
+
 	caribou_uart_set_config(ctx_rtu->fd,&uart_config);		/* FIXME - use get correct port number */
 
     return 0;
@@ -404,9 +420,9 @@ int modbus_rtu_set_rts(modbus_t *ctx, int mode)
 	{
         modbus_rtu_t *ctx_rtu = ctx->backend_data;
 		if ( mode == MODBUS_RTU_RTS_UP )
-			caribou_gpio_set(ctx_rtu->rs485_dir);
+            rs485_tx(ctx_rtu)
 		else
-			caribou_gpio_reset(ctx_rtu->rs485_dir);
+			rs485_rx(ctx_rtu);
 	}
 	else
 	{
@@ -516,6 +532,7 @@ const modbus_backend_t _modbus_rtu_backend = {
 
 modbus_t* modbus_new_rtu(FILE* fp,
 						 caribou_gpio_t* rs485_dir,
+						 caribou_gpio_t* nrs485_dir,
                          int baud,
 						 char parity, 
 						 int data_bit,
@@ -535,6 +552,7 @@ modbus_t* modbus_new_rtu(FILE* fp,
 	ctx_rtu->fp=fp;
 	ctx_rtu->fd=_fd(fp);
 	ctx_rtu->rs485_dir=rs485_dir;
+	ctx_rtu->nrs485_dir=nrs485_dir;
 
     ctx_rtu->baud = baud;
     if (parity == 'N' || parity == 'E' || parity == 'O') {

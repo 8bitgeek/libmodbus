@@ -88,7 +88,8 @@ typedef struct _modbus_rtu {
     char parity;
 
 #if defined(_CARIBOU_RTOS_)
-	caribou_gpio_t*	rs485_dir;
+	caribou_gpio_t*	rs485_dir;	
+    caribou_gpio_t*	nrs485_dir;
     FILE* fp;
 	int fd;
     int serial_mode;

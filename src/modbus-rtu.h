@@ -30,6 +30,7 @@ MODBUS_BEGIN_DECLS
 
 MODBUS_API modbus_t* modbus_new_rtu(FILE* fp, 
 									caribou_gpio_t* rs485_dir, 
+									caribou_gpio_t* nrs485_dir, 
 									int baud, 
 									char parity,
 									int data_bit, 
