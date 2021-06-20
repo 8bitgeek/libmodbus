@@ -72,13 +72,11 @@ static const uint8_t table_crc_lo[] = {
 #define rs485_tx(ctx_rtu) {                                                 \
     caribou_thread_lock();                                                  \
     caribou_gpio_set((ctx_rtu)->rs485_dir);                                 \
-    if((ctx_rtu)->nrs485_dir) caribou_gpio_set((ctx_rtu)->nrs485_dir);      \
     caribou_thread_unlock(); }
     
 #define rs485_rx(ctx_rtu) {                                                 \
     caribou_thread_lock();                                                  \
     caribou_gpio_reset((ctx_rtu)->rs485_dir);                               \
-    if((ctx_rtu)->nrs485_dir) caribou_gpio_reset((ctx_rtu)->nrs485_dir);    \
     caribou_thread_unlock(); }
 
 
@@ -532,7 +530,6 @@ const modbus_backend_t _modbus_rtu_backend = {
 
 modbus_t* modbus_new_rtu(FILE* fp,
 						 caribou_gpio_t* rs485_dir,
-						 caribou_gpio_t* nrs485_dir,
                          int baud,
 						 char parity, 
 						 int data_bit,
@@ -548,11 +545,11 @@ modbus_t* modbus_new_rtu(FILE* fp,
     ctx_rtu = (modbus_rtu_t *)ctx->backend_data;
 
     /* Device name and \0 */
+    ctx_rtu->timeout =  _RESPONSE_TIMEOUT * 100;
     ctx_rtu->device = NULL;
 	ctx_rtu->fp=fp;
 	ctx_rtu->fd=_fd(fp);
 	ctx_rtu->rs485_dir=rs485_dir;
-	ctx_rtu->nrs485_dir=nrs485_dir;
 
     ctx_rtu->baud = baud;
     if (parity == 'N' || parity == 'E' || parity == 'O') {
